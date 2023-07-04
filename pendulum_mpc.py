@@ -11,8 +11,9 @@ config.update("jax_enable_x64", True)
 # We use the CPU instead of GPU und mute all warnings if no GPU/TPU is found.
 config.update("jax_platform_name", "cpu")
 
+
 def final_cost(state: jnp.ndarray, goal_state: jnp.ndarray) -> float:
-    final_state_cost = jnp.diag(jnp.array([1e0, 1e-1]))
+    final_state_cost = jnp.diag(jnp.array([2e0, 1e-1]))
     angle, ang_vel = state
     _wrapped = jnp.hstack((wrap_angle(angle), ang_vel)) - goal_state
 
@@ -57,8 +58,8 @@ dynamics = discretize_dynamics(
 
 
 def project_control_constraints(consensus: jnp.ndarray) -> jnp.ndarray:
-    torque_ub = 5
-    torque_lb = -5
+    torque_ub = 5.0
+    torque_lb = -5.0
     consensus = jnp.where(consensus <= torque_lb, torque_lb, consensus)
     consensus = jnp.where(consensus >= torque_ub, torque_ub, consensus)
     return consensus
@@ -82,15 +83,17 @@ def plot_traj(states, controls, conv_iterations):
     plt.plot(states[:, 1], label="angular velocity")
     plt.legend()
     plt.show()
-    fig, (ax1, ax2) = plt.subplots(2)
-    ax1.plot(controls)
-    ax1.set_ylabel("torque")
-    ax2.plot(conv_iterations)
-    ax2.set_ylabel("admm iterations")
+    # fig, (ax1, ax2) = plt.subplots(2)
+    # ax1.plot(controls)
+    # ax1.set_ylabel("torque")
+    # ax2.plot(conv_iterations)
+    # ax2.set_ylabel("admm iterations")
+    # plt.show()
+    plt.plot(controls)
     plt.show()
 
 
-horizon = 25
+horizon = 40
 A = jnp.array([[0.0, 0.0, 1.0]])  # select constrained states and control A [x' u']'
 mean = jnp.array([0.0])
 sigma = jnp.array([1.0])
@@ -122,11 +125,10 @@ def mpc_body(carry, inp):
         penalty_param,
     )
     next_state = dynamics(prev_state, control[0])
-    # jax.debug.callback(plot_traj, control)
-    # jax.debug.breakpoint()
     return (next_state, control, consensus, dual), (next_state, control[0], conv_it)
 
 
 _, mpc_out = jax.lax.scan(mpc_body, (x0, u, z, l), jnp.arange(0, 100, 1), length=100)
 mpc_states, mpc_controls, iterations = mpc_out
-plot_traj(mpc_states, mpc_controls, iterations)
+mpc_states = jnp.vstack((x0, mpc_states))
+plot_traj(-mpc_states, -mpc_controls, iterations)

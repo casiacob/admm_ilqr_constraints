@@ -74,15 +74,12 @@ def bwd_pass(
             penalty_param,
             constrained_variables_selector,
         )
-        fxx = jacrev(jacrev(dynamics, 0), 0)(state, control)
-        fuu = jacrev(jacrev(dynamics, 1), 1)(state, control)
-        fux = jacrev(jacrev(dynamics, 1), 0)(state, control)
 
         Qx = lx + fx.T @ Vx
         Qu = lu + fu.T @ Vx
-        Qxx = lxx + fx.T @ Vxx @ fx + jnp.tensordot(Vx, fxx, axes=1)
-        Qux = lux + fu.T @ Vxx @ fx + jnp.tensordot(Vx, fux, axes=1)
-        Quu = luu + fu.T @ Vxx @ fu + jnp.tensordot(Vx, fuu, axes=1)
+        Qxx = lxx + fx.T @ Vxx @ fx
+        Qux = lux + fu.T @ Vxx @ fx
+        Quu = luu + fu.T @ Vxx @ fu
         Quu = Quu + reg * jnp.eye(control.shape[0])
         Quu = (Quu + Quu.T) / 2
         convex = jnp.logical_and(convex, jnp.all(jnp.linalg.eigvals(Quu) > 0.0))

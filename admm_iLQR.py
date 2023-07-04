@@ -18,6 +18,7 @@ def admm(
     projection: Callable,
     penalty_param0: float,
 ):
+
     def state_traj(x0, u):
         def body_scan(x_prev, control):
             x_next = dynamics(x_prev, control)
@@ -37,11 +38,20 @@ def admm(
         return constrained_variables_selector @ y - z
 
     def admm_iteration(val):
-        controls, consensus, lagrange_mult, loop_cnt, _, _, penalty_param = val
+        (
+            controls,
+            consensus,
+            lagrange_mult,
+            loop_cnt,
+            rp_infty,
+            rd_infty,
+            penalty_param,
+        ) = val
         consensus_prev = consensus
 
         # ADMM step 1: ilqr
         states = state_traj(initial_state, controls)
+
         states, controls = ilqr(
             states,
             controls,
@@ -70,17 +80,13 @@ def admm(
         )
 
         # primal and dual residuals' infinity norms
-        rp_infty = jnp.max(
-            jnp.abs(vmap(primal_residual)(states[:-1], controls, consensus))
-        )
-
-        # adaptive penalty param update
+        rp_infty = jnp.max(jnp.abs(vmap(primal_residual)(states[:-1], controls, consensus)))
         rd_infty = jnp.max(jnp.abs(consensus - consensus_prev))
-        # res_ratio = jnp.sqrt(rp_infty / rd_infty)
-        # res_ratio = 1.
-        # res_ratio = jnp.where(res_ratio < jnp.inf, res_ratio, 1.0)
-        # penalty_param = penalty_param * jnp.where(res_ratio >= 5, res_ratio, 1.0)
+
         loop_cnt += 1
+        debug.print("||rp||_infty = {x}", x=rp_infty)
+        debug.print("||rd||_infty = {x}", x=rd_infty)
+        debug.print("------------------------------")
         return (
             controls,
             consensus,
@@ -92,9 +98,10 @@ def admm(
         )
 
     def admm_conv(val):
-        _, _, _, loop_cnt, rp_infty, rd_infty, penalty_param = val
-        # debug.print('penalty_param {x}', x=penalty_param)
-        exit_condition = jnp.logical_and(rp_infty < 1e-4, rd_infty < 1e-3)
+        _, _, _, loop_cnt, rp_infty, rd_infty, _ = val
+        exit_condition = jnp.logical_and(
+            rp_infty < 1e-3, rd_infty < 1e-2
+        )
         return jnp.logical_and(loop_cnt < max_iter, jnp.logical_not(exit_condition))
 
     max_iter = jnp.inf
@@ -120,6 +127,9 @@ def admm(
         ),
     )
     debug.print("ADMM converged in {x}", x=iterations)
-    debug.print("||rp||_infty = {x}", x=max_primal_residual)
-    debug.print("||rd||_infty = {x}", x=max_dual_residual)
-    return optimal_controls, optimal_consensus, optimal_lagrange, iterations
+    return (
+        optimal_controls,
+        optimal_consensus,
+        optimal_lagrange,
+        iterations,
+    )

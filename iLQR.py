@@ -114,11 +114,14 @@ def ilqr(
         )
 
     def iLQR_convergence(val):
-        _, _, _, _, value_change, _ = val
-        exit_condition = jnp.abs(value_change) < 1e-8
+        _, _, _, _, value_change, loop_counter = val
+        exit_condition = jnp.logical_or(
+            jnp.abs(value_change) < 1e-16, loop_counter > max_iter
+        )
         return jnp.logical_not(exit_condition)
 
-    reg_param0 = 1.0
+    max_iter = jnp.inf
+    reg_param0 = 1.
     reg_param_mult_fact0 = 2.0
 
     optimal_states, optimal_controls, _, _, _, iterations = jax.lax.while_loop(
